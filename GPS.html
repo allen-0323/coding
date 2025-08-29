@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ESP8266 GPS 地圖</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // ⚠️ 把這裡換成 ESP8266 的 IP
+    const ESP_IP = "http://192.168.1.123/gps";
+
+    var map = L.map('map').setView([25.033964, 121.564468], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    var marker = L.marker([25.033964, 121.564468]).addTo(map);
+
+    async function updateGPS() {
+      try {
+        let res = await fetch(ESP_IP);
+        let data = await res.json();
+        if (data.lat && data.lng) {
+          let lat = data.lat;
+          let lng = data.lng;
+          marker.setLatLng([lat, lng])
+                .setPopupContent("目前位置：<br>" + lat + ", " + lng)
+                .openPopup();
+          map.setView([lat, lng], 15);
+        } else {
+          console.log("等待 GPS 定位...");
+        }
+      } catch (e) {
+        console.error("連線錯誤", e);
+      }
+    }
+
+    // 每 3 秒更新一次位置
+    setInterval(updateGPS, 3000);
+  </script>
+</body>
+</html>
