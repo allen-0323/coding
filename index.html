@@ -31,93 +31,98 @@
   <div class="locate-btn" id="locateBtn">📍 回到定位</div>
 
   <script>
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const map = L.map('map', { zoomControl:false }).setView([23.5,121],7);
-    L.control.zoom({position:'bottomright'}).addTo(map);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const map = L.map('map', { zoomControl:false }).setView([23.5,121],7);
+      L.control.zoom({position:'bottomright'}).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
 
-    const marker = L.marker([23.5,121]).addTo(map).bindPopup("GPS訊號源");
-    const path = L.polyline([], { color: '#ef4444', weight: 3 }).addTo(map);
+      const marker = L.marker([23.5,121]).addTo(map).bindPopup("GPS訊號源");
+      const path = L.polyline([], { color: '#ef4444', weight: 3 }).addTo(map);
 
-    const $latlng = document.getElementById('latlng');
-    const $speed  = document.getElementById('speed');
-    const $alt    = document.getElementById('alt');
-    const $sat    = document.getElementById('sat');
-    const $ts     = document.getElementById('ts');
-    const $dot    = document.getElementById('connDot');
-    const $connTx = document.getElementById('connText');
-    const $locateBtn = document.getElementById('locateBtn');
+      const $latlng = document.getElementById('latlng');
+      const $speed  = document.getElementById('speed');
+      const $alt    = document.getElementById('alt');
+      const $sat    = document.getElementById('sat');
+      const $ts     = document.getElementById('ts');
+      const $dot    = document.getElementById('connDot');
+      const $connTx = document.getElementById('connText');
+      const $locateBtn = document.getElementById('locateBtn');
 
-    let firstUpdate = true;
-    let lastPos = null;
-    const smoothBuffer = [];
-    const bufferSize = 5;
+      let firstUpdate = true;
+      let lastPos = null;
+      const smoothBuffer = [];
+      const bufferSize = 5;
 
-    function smoothLatLng(lat,lng){
-      smoothBuffer.push([lat,lng]);
-      if(smoothBuffer.length>bufferSize) smoothBuffer.shift();
-      let avgLat=0, avgLng=0;
-      smoothBuffer.forEach(p=>{avgLat+=p[0]; avgLng+=p[1];});
-      return [avgLat/smoothBuffer.length, avgLng/smoothBuffer.length];
-    }
-
-    function utcToLocalDynamic(utcStr) {
-      if (!utcStr) return '—';
-      const [h, m, s] = utcStr.split(':').map(Number);
-      let date = new Date();
-      date.setUTCHours(h, m, s);
-      return date.toLocaleTimeString();
-    }
-
-    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
-      connectTimeout:4000, clientId:'web_'+Math.random().toString(16).slice(2), clean:true, keepalive:30
-    });
-
-    client.on('connect',()=>{
-      $dot.className='dot ok'; $connTx.textContent='已連線';
-      client.subscribe('gps/device1',{qos:0});
-    });
-    client.on('reconnect',()=>{$dot.className='dot bad'; $connTx.textContent='重連中…';});
-    client.on('close',()=>{$dot.className='dot bad'; $connTx.textContent='連線關閉';});
-    client.on('error',(e)=>{console.error(e);});
-
-    client.on('message',(topic,payload)=>{
-      console.log("收到 MQTT:", payload.toString());
-      try{
-        const { lat, lng, spd, alt, ts, sat } = JSON.parse(payload.toString());
-        if(typeof lat!=='number'||typeof lng!=='number') return;
-
-        const [sLat,sLng] = smoothLatLng(lat,lng);
-        lastPos = [sLat,sLng];
-        marker.setLatLng(lastPos);
-
-        const pts = path.getLatLngs();
-        if(pts.length===0 || L.latLng(sLat,sLng).distanceTo(pts[pts.length-1])>20){
-          path.addLatLng(lastPos);
-        }
-
-        if(firstUpdate){
-          map.setView(lastPos,18);
-          firstUpdate=false;
-        }
-
-        $latlng.textContent = `${sLat.toFixed(6)}, ${sLng.toFixed(6)}`;
-        let displaySpd = (typeof spd==='number' && spd<1)?"0.00":(typeof spd==='number'?spd.toFixed(2):'—');
-        $speed.textContent  = displaySpd;
-        $alt.textContent    = (typeof alt==='number')?alt.toFixed(1):'—';
-        $sat.textContent    = (typeof sat==='number')?sat:'—';
-        $ts.textContent     = utcToLocalDynamic(ts);
-
-      }catch(err){
-        console.warn('JSON解析錯誤:',err);
+      function smoothLatLng(lat,lng){
+        smoothBuffer.push([lat,lng]);
+        if(smoothBuffer.length>bufferSize) smoothBuffer.shift();
+        let avgLat=0, avgLng=0;
+        smoothBuffer.forEach(p=>{avgLat+=p[0]; avgLng+=p[1];});
+        return [avgLat/smoothBuffer.length, avgLng/smoothBuffer.length];
       }
-    });
 
-    $locateBtn.addEventListener('click',()=>{
-      if(lastPos) map.setView(lastPos,18,{animate:true});
-      else alert("尚未收到 GPS 訊號");
+      function utcToLocalDynamic(utcStr) {
+        if (!utcStr) return '—';
+        const [h, m, s] = utcStr.split(':').map(Number);
+        let date = new Date();
+        date.setUTCHours(h, m, s);
+        return date.toLocaleTimeString();
+      }
+
+      const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+        connectTimeout:4000, clientId:'web_'+Math.random().toString(16).slice(2), clean:true, keepalive:30
+      });
+
+      client.on('connect',()=>{
+        $dot.className='dot ok'; $connTx.textContent='已連線';
+        client.subscribe('gps/device1',{qos:0});
+      });
+      client.on('reconnect',()=>{$dot.className='dot bad'; $connTx.textContent='重連中…';});
+      client.on('close',()=>{$dot.className='dot bad'; $connTx.textContent='連線關閉';});
+      client.on('error',(e)=>{console.error(e);});
+
+      client.on('message',(topic,payload)=>{
+        try{
+          const data = JSON.parse(payload.toString());
+          const lat = Number(data.lat);
+          const lng = Number(data.lng);
+          const spd = Number(data.spd);
+          const alt = Number(data.alt);
+          const sat = Number(data.sat);
+          const ts  = data.ts;
+
+          if(isNaN(lat)||isNaN(lng)) return;
+
+          const [sLat,sLng] = smoothLatLng(lat,lng);
+          lastPos = [sLat,sLng];
+          marker.setLatLng(lastPos);
+
+          const pts = path.getLatLngs();
+          if(pts.length===0 || L.latLng(sLat,sLng).distanceTo(pts[pts.length-1])>20){
+            path.addLatLng(lastPos);
+          }
+
+          if(firstUpdate){
+            map.setView(lastPos,18);
+            firstUpdate=false;
+          }
+
+          $latlng.textContent = `${sLat.toFixed(6)}, ${sLng.toFixed(6)}`;
+          $speed.textContent  = (!isNaN(spd) && spd<1)?"0.00":(!isNaN(spd)?spd.toFixed(2):'—');
+          $alt.textContent    = !isNaN(alt)?alt.toFixed(1):'—';
+          $sat.textContent    = !isNaN(sat)?sat:'—';
+          $ts.textContent     = utcToLocalDynamic(ts);
+
+        }catch(err){
+          console.warn('JSON解析錯誤:',err);
+        }
+      });
+
+      $locateBtn.addEventListener('click',()=>{
+        if(lastPos) map.setView(lastPos,18,{animate:true});
+        else alert("尚未收到 GPS 訊號");
+      });
     });
-  });
   </script>
 </body>
 </html>
